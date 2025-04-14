@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>简洁在线写字板</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary-color: #4f46e5;
+            --secondary-color: #f9fafb;
+        }
+        
+        body {
+            transition: background-color 0.3s ease;
+        }
+        
+        #editor {
+            min-height: calc(87vh);
+            line-height: 1.6;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+        
+        .font-size-btn {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+        
+        .tooltip-text {
+            visibility: hidden;
+            width: 120px;
+            background-color: #333;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 5px;
+            position: absolute;
+            z-index: 1;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-top: 5px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 12px;
+        }
+        
+        .tooltip:hover .tooltip-text {
+            visibility: visible;
+            opacity: 1;
+        }
+        
+        /* 新增toast样式 */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #333;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 4px;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .toast.show {
+            opacity: 1;
+        }
+        
+        /* 对齐下拉菜单样式 */
+        .alignment-dropdown {
+            position: relative;
+            display: inline-block;
+        }
+        
+        .alignment-dropdown-content {
+            display: none;
+            position: absolute;
+            background-color: white;
+            min-width: 100px;
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+            z-index: 1;
+            border-radius: 0.375rem;
+            overflow: hidden;
+        }
+        
+        .alignment-dropdown-content button {
+            width: 100%;
+            text-align: left;
+            padding: 8px 12px;
+            border: none;
+            background: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+        }
+        
+        .alignment-dropdown-content button:hover {
+            background-color: #f3f4f6;
+        }
+        
+        .alignment-dropdown:hover .alignment-dropdown-content {
+            display: block;
+        }
+        
+        @media (max-width: 640px) {
+            .toolbar {
+                flex-wrap: wrap;
+                padding: 8px;
+            }
+            
+            .toolbar-group {
+                margin-bottom: 2px;
+            }
+            
+            .tooltip-text {
+                width: 100px;
+                font-size: 10px;
+            }
+            
+            .alignment-dropdown-content {
+                min-width: 80px;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans">
+    <!-- 新增toast元素 -->
+    <div id="toast" class="toast"></div>
+    
+    <div class="container mx-auto px-1 py-2 max-w-6xl">
+        <div class="bg-white rounded-xl shadow-md overflow-hidden mb-1">
+            <!-- 工具栏 -->
+            <div class="toolbar bg-gray-100 px-4 py-3 flex items-center justify-between flex-wrap border-b">
+                <div class="toolbar-group flex items-center space-x-2">
+                    <!-- 字体大小 -->
+                    <div class="flex items-center mr-1">
+                        <button id="decrease-font" class="font-size-btn bg-white rounded-md p-2 shadow-sm hover:bg-gray-200 tooltip">
+                            <i class="fas fa-font text-sm"></i>
+                            <span class="tooltip-text">减小字体</span>
+                        </button>
+                        <span id="font-size-display" class="mx-2 text-sm font-medium">16px</span>
+                        <button id="increase-font" class="font-size-btn bg-white rounded-md p-2 shadow-sm hover:bg-gray-200 tooltip">
+                            <i class="fas fa-font text-lg"></i>
+                            <span class="tooltip-text">增大字体</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="toolbar-group flex items-center space-x-2">
+                    <!-- 文字对齐 - 合并为下拉菜单 -->
+                    <div class="alignment-dropdown">
+                        <button id="alignment-toggle" class="p-1 rounded-md hover:bg-gray-200 tooltip">
+                            <i class="fas fa-align-left"></i>
+                            <span class="tooltip-text">文字对齐</span>
+                        </button>
+                        <div class="alignment-dropdown-content">
+                            <button id="align-left" class="p-1 hover:bg-gray-200">
+                                <i class="fas fa-align-left mr-1"></i>左对齐
+                            </button>
+                            <button id="align-center" class="p-1 hover:bg-gray-200">
+                                <i class="fas fa-align-center mr-1"></i>居中对齐
+                            </button>
+                            <button id="align-right" class="p-1 hover:bg-gray-200">
+                                <i class="fas fa-align-right mr-1"></i>右对齐
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- 文字样式 -->
+                    <button id="bold" class="p-1 rounded-md hover:bg-gray-200 font-bold tooltip">
+                        <i class="fas fa-bold"></i>
+                        <span class="tooltip-text">加粗</span>
+                    </button>
+                    <button id="italic" class="p-1 rounded-md hover:bg-gray-200 italic tooltip">
+                        <i class="fas fa-italic"></i>
+                        <span class="tooltip-text">斜体</span>
+                    </button>
+                    <button id="underline" class="p-1 rounded-md hover:bg-gray-200 underline tooltip">
+                        <i class="fas fa-underline"></i>
+                        <span class="tooltip-text">下划线</span>
+                    </button>
+                    
+                    <!-- 颜色选择 -->
+                    <div class="flex items-center ml-1">
+                        <input type="color" id="text-color" value="#000000" class="w-8 h-8 cursor-pointer">
+                    </div>
+                </div>
+                
+                <div class="toolbar-group flex items-center space-x-2">
+                    <!-- 仅保留下载按钮 -->
+                    <button id="download" class="p-2 rounded-md hover:bg-gray-200 text-green-500 tooltip">
+                        <i class="fas fa-download"></i>
+                        <span class="tooltip-text">下载文本</span>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 编辑区域 -->
+            <div id="editor" class="p-3 text-lg" contenteditable="true" data-placeholder="点击此处开始输入...">
+            </div>
+        </div>
+        
+        <div class="text-center text-sm text-gray-500 mt-2">
+            <p>简洁在线写字板 - 随时随地记录您的想法</p>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const editor = document.getElementById('editor');
+            const fontSizeDisplay = document.getElementById('font-size-display');
+            const increaseFontBtn = document.getElementById('increase-font');
+            const decreaseFontBtn = document.getElementById('decrease-font');
+            const boldBtn = document.getElementById('bold');
+            const italicBtn = document.getElementById('italic');
+            const underlineBtn = document.getElementById('underline');
+            const alignLeftBtn = document.getElementById('align-left');
+            const alignCenterBtn = document.getElementById('align-center');
+            const alignRightBtn = document.getElementById('align-right');
+            const alignmentToggle = document.getElementById('alignment-toggle');
+            const textColor = document.getElementById('text-color');
+            const downloadBtn = document.getElementById('download');
+            const toast = document.getElementById('toast');
+            
+            let fontSize = 16;
+            let currentAlignment = 'left';
+            
+            // 设置初始字体大小
+            updateFontSize();
+            
+            // 显示toast消息
+            function showToast(message) {
+                toast.textContent = message;
+                toast.classList.add('show');
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                }, 2000);
+            }
+            
+            // 自适应占位符
+            editor.addEventListener('focus', function() {
+                if (editor.textContent === '') {
+                    editor.dataset.placeholder = '';
+                }
+            });
+            
+            editor.addEventListener('blur', function() {
+                if (editor.textContent === '') {
+                    editor.dataset.placeholder = '点击此处开始输入...';
+                }
+            });
+            
+            // 增大字体
+            increaseFontBtn.addEventListener('click', function() {
+                fontSize = Math.min(fontSize + 2, 36);
+                updateFontSize();
+                showToast(`字体大小已增大到 ${fontSize}px`);
+            });
+            
+            // 减小字体
+            decreaseFontBtn.addEventListener('click', function() {
+                fontSize = Math.max(fontSize - 2, 10);
+                updateFontSize();
+                showToast(`字体大小已减小到 ${fontSize}px`);
+            });
+            
+            // 更新字体大小
+            function updateFontSize() {
+                editor.style.fontSize = `${fontSize}px`;
+                fontSizeDisplay.textContent = `${fontSize}px`;
+            }
+            
+            // 文字样式
+            boldBtn.addEventListener('click', function() {
+                document.execCommand('bold', false, null);
+                boldBtn.classList.toggle('bg-gray-300');
+                showToast(boldBtn.classList.contains('bg-gray-300') ? '已加粗' : '取消加粗');
+            });
+            
+            italicBtn.addEventListener('click', function() {
+                document.execCommand('italic', false, null);
+                italicBtn.classList.toggle('bg-gray-300');
+                showToast(italicBtn.classList.contains('bg-gray-300') ? '已斜体' : '取消斜体');
+            });
+            
+            underlineBtn.addEventListener('click', function() {
+                document.execCommand('underline', false, null);
+                underlineBtn.classList.toggle('bg-gray-300');
+                showToast(underlineBtn.classList.contains('bg-gray-300') ? '已下划线' : '取消下划线');
+            });
+            
+            // 文字对齐
+            alignLeftBtn.addEventListener('click', function() {
+                document.execCommand('justifyLeft', false, null);
+                currentAlignment = 'left';
+                updateAlignmentIcon();
+                showToast('已左对齐');
+            });
+            
+            alignCenterBtn.addEventListener('click', function() {
+                document.execCommand('justifyCenter', false, null);
+                currentAlignment = 'center';
+                updateAlignmentIcon();
+                showToast('已居中对齐');
+            });
+            
+            alignRightBtn.addEventListener('click', function() {
+                document.execCommand('justifyRight', false, null);
+                currentAlignment = 'right';
+                updateAlignmentIcon();
+                showToast('已右对齐');
+            });
+            
+            // 更新对齐图标
+            function updateAlignmentIcon() {
+                const icon = alignmentToggle.querySelector('i');
+                icon.className = `fas fa-align-${currentAlignment}`;
+            }
+            
+            // 文字颜色
+            textColor.addEventListener('input', function() {
+                document.execCommand('foreColor', false, textColor.value);
+                showToast(`文字颜色已更改为 ${textColor.value}`);
+            });
+            
+            // 下载文本
+            downloadBtn.addEventListener('click', function() {
+                const content = editor.innerText || editor.textContent;
+                if (!content.trim()) {
+                    showToast('没有内容可下载');
+                    return;
+                }
+                
+                const blob = new Blob([content], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `写字板-${new Date().toISOString().slice(0, 10)}.txt`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                showToast('文件已下载');
+            });
+            
+            // 自适应浏览器窗口大小变化
+            window.addEventListener('resize', function() {
+                // 可以根据窗口大小调整字体大小
+                const windowWidth = window.innerWidth;
+                if (windowWidth < 640) { // 移动设备
+                    fontSize = Math.max(14, Math.min(fontSize, 20));
+                } else {
+                    fontSize = Math.max(16, Math.min(fontSize, 24));
+                }
+                updateFontSize();
+            });
+            
+            // 自动聚焦到编辑器
+            editor.focus();
+        });
+    </script>
+</body>
+</html>

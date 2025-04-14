@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图片批量调整大小工具</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .dropzone {
+            border: 2px dashed #ccc;
+            transition: all 0.3s ease;
+        }
+        .dropzone.active {
+            border-color: #4f46e5;
+            background-color: rgba(79, 70, 229, 0.05);
+        }
+        .preview-image {
+            transition: all 0.3s ease;
+        }
+        .preview-image:hover {
+            transform: scale(1.02);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+        .progress-bar {
+            transition: width 0.3s ease;
+        }
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+        }
+        .animate-pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        .folder-item {
+            padding-left: 20px;
+            position: relative;
+        }
+        .folder-item:before {
+            content: "📁";
+            position: absolute;
+            left: 0;
+        }
+        .file-item {
+            padding-left: 20px;
+        }
+        .directory-tree {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            background-color: #f9fafb;
+        }
+        .size-limit-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.5rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            background-color: #e0e7ff;
+            color: #4f46e5;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <!-- 头部 -->
+        <header class="text-center mb-12">
+            <h1 class="text-4xl font-bold text-indigo-600 mb-2">图片批量调整大小工具</h1>
+            <p class="text-gray-600 max-w-2xl mx-auto">支持文件夹上传，保持目录结构，批量调整多张图片大小</p>
+        </header>
+
+        <!-- 主功能区 -->
+        <div class="bg-white rounded-xl shadow-lg overflow-hidden max-w-4xl mx-auto">
+            <!-- 步骤指示器 -->
+            <div class="flex border-b border-gray-200">
+                <div class="w-1/3 py-4 px-6 text-center border-b-2 border-indigo-500 font-medium text-indigo-600">
+                    <i class="fas fa-upload mr-2"></i>上传图片/文件夹
+                </div>
+                <div class="w-1/3 py-4 px-6 text-center border-b-2 border-gray-200 font-medium text-gray-500">
+                    <i class="fas fa-sliders-h mr-2"></i>调整设置
+                </div>
+                <div class="w-1/3 py-4 px-6 text-center border-b-2 border-gray-200 font-medium text-gray-500">
+                    <i class="fas fa-download mr-2"></i>下载结果
+                </div>
+            </div>
+
+            <!-- 上传区域 -->
+            <div class="p-8" id="upload-section">
+                <div class="dropzone rounded-lg p-12 text-center cursor-pointer mb-6" id="dropzone">
+                    <div class="mx-auto w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mb-4">
+                        <i class="fas fa-cloud-upload-alt text-3xl text-indigo-500"></i>
+                    </div>
+                    <h3 class="text-xl font-medium text-gray-700 mb-2">拖放图片或文件夹到此处</h3>
+                    <p class="text-gray-500 mb-4">或点击选择文件/文件夹</p>
+                    <input type="file" id="file-input" class="hidden" accept="image/*" multiple webkitdirectory directory>
+                    <button id="select-files-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-6 rounded-lg transition duration-200 mr-2">
+                        选择图片
+                    </button>
+                    <button id="select-folder-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-6 rounded-lg transition duration-200">
+                        选择文件夹
+                    </button>
+                    <p class="text-sm text-gray-400 mt-4">支持 JPG, PNG, GIF, WEBP 格式</p>
+                </div>
+
+                <!-- 预览区域 -->
+                <div id="preview-area" class="hidden">
+                    <h3 class="text-lg font-medium text-gray-700 mb-4">已选择内容 (<span id="file-count">0</span> 个文件)</h3>
+                    
+                    <div class="directory-tree mb-4" id="directory-tree">
+                        <!-- 目录树将在这里动态生成 -->
+                    </div>
+                    
+                    <div class="flex justify-between items-center">
+                        <button id="clear-files-btn" class="text-red-500 hover:text-red-700 font-medium flex items-center">
+                            <i class="fas fa-trash-alt mr-2"></i>清除所有
+                        </button>
+                        <button id="next-step-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-6 rounded-lg transition duration-200">
+                            下一步 <i class="fas fa-arrow-right ml-2"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 设置区域 -->
+            <div class="p-8 hidden" id="settings-section">
+                <h2 class="text-xl font-medium text-gray-700 mb-6">调整设置</h2>
+                
+                <div class="grid md:grid-cols-2 gap-8 mb-8">
+                    <!-- 尺寸选项 -->
+                    <div>
+                        <h3 class="text-lg font-medium text-gray-700 mb-4">尺寸选项</h3>
+                        
+                        <div class="space-y-4">
+                            <div class="ml-7 mt-2 grid grid-cols-2 gap-4">
+                                <div>
+                                    <label for="custom-width" class="block text-sm font-medium text-gray-700">宽度 (px)</label>
+                                    <input type="number" id="custom-width" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" placeholder="宽度" value="1600">
+                                </div>
+                                <div>
+                                    <label for="custom-height" class="block text-sm font-medium text-gray-700">高度 (px)</label>
+                                    <input type="number" id="custom-height" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" placeholder="高度" value="1600">
+                                </div>
+                            </div>
+                            
+                            <div class="ml-7 mt-2">
+                                <div class="flex items-center">
+                                    <input id="maintain-aspect" type="checkbox" checked class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                    <label for="maintain-aspect" class="ml-2 block text-sm text-gray-700">保持宽高比</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 其他选项 -->
+                    <div>
+                        <h3 class="text-lg font-medium text-gray-700 mb-4">其他选项</h3>
+                        
+                        <div class="space-y-4">
+                            <div>
+                                <label for="output-format" class="block text-sm font-medium text-gray-700">输出格式</label>
+                                <select id="output-format" class="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm">
+                                    <option value="original">保持原格式</option>
+                                    <option value="jpeg">JPEG</option>
+                                    <option value="png">PNG</option>
+                                    <option value="webp">WEBP</option>
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label for="quality" class="block text-sm font-medium text-gray-700">质量 (JPEG/WEBP)</label>
+                                <input type="number" id="quality" min="1" max="100" value="100" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                <div class="flex justify-between text-xs text-gray-500">
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label for="resize-method" class="block text-sm font-medium text-gray-700">调整方式</label>
+                                <select id="resize-method" class="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm">
+                                    <option value="stretch" selected>拉伸适应</option>
+                                    <option value="cover">裁剪填充</option>
+                                    <option value="contain">包含全部</option>
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label for="output-structure" class="block text-sm font-medium text-gray-700">输出结构</label>
+                <select id="output-structure" class="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm">
+                  <option value="preserve">保持原始目录结构</option>
+                  <option value="flatten">所有文件放在同一目录</option>
+                </select>
+              </div>
+
+              <!-- 修改后的文件大小限制选项 -->
+              <div>
+                <div class="flex items-center justify-between">
+                  <label for="size-limit-input" class="block text-sm font-medium text-gray-700">文件大小限制 (MB)</label>
+                  <span class="size-limit-badge text-xs" id="size-limit-badge">
+                    <i class="fas fa-info-circle mr-1"></i> 不限制
+                  </span>
+                </div>
+                <div class="mt-2">
+                  <input type="number" id="size-limit-input" min="0" step="0.1" value="0" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                </div>
+                <p class="mt-1 text-xs text-gray-500">超过限制的文件将被压缩或跳过 (0表示不限制)</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="flex justify-between pt-4 border-t border-gray-200">
+          <button id="back-to-upload-btn" class="text-gray-600 hover:text-gray-800 font-medium flex items-center">
+            <i class="fas fa-arrow-left mr-2"></i>返回
+          </button>
+          <button id="process-images-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-6 rounded-lg transition duration-200 flex items-center">
+            <i class="fas fa-cog mr-2"></i>处理图片
+          </button>
+        </div>
+      </div>
+
+      <!-- 处理区域 -->
+      <div class="p-8 hidden" id="processing-section">
+        <div class="text-center">
+          <div class="mx-auto w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mb-4">
+            <i class="fas fa-cog text-3xl text-indigo-500 animate-spin"></i>
+          </div>
+          <h3 class="text-xl font-medium text-gray-700 mb-2">正在处理图片</h3>
+          <p class="text-gray-500 mb-6">请稍候，这可能需要一些时间...</p>
+          
+          <div class="w-full bg-gray-200 rounded-full h-2.5 mb-6">
+            <div id="processing-progress" class="bg-indigo-600 h-2.5 rounded-full" style="width: 0%"></div>
+          </div>
+          
+          <div class="text-sm text-gray-500" id="processing-status">准备开始处理...</div>
+          <div class="text-sm text-gray-500 mt-2" id="size-limit-status"></div>
+        </div>
+      </div>
+
+      <!-- 下载区域 -->
+      <div class="p-8 hidden" id="download-section">
+        <div class="text-center mb-8">
+          <div class="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
+            <i class="fas fa-check text-3xl text-green-500"></i>
+          </div>
+          <h3 class="text-xl font-medium text-gray-700 mb-2">处理完成!</h3>
+          <p class="text-gray-500">您的图片已准备好下载</p>
+        </div>
+        
+        <div class="directory-tree mb-6" id="result-directory-tree">
+          <!-- 处理后的目录树将在这里动态生成 -->
+        </div>
+        
+        <div class="flex justify-between items-center pt-4 border-t border-gray-200">
+          <button id="start-over-btn" class="text-gray-600 hover:text-gray-800 font-medium flex items-center">
+            <i class="fas fa-redo mr-2"></i>重新开始
+          </button>
+          <div class="flex space-x-3">
+            <button id="download-all-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-6 rounded-lg transition duration-200 flex items-center">
+              <i class="fas fa-download mr-2"></i>下载全部
+            </button>
+            <button id="download-zip-btn" class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-6 rounded-lg transition duration-200 flex items-center">
+              <i class="fas fa-file-archive mr-2"></i>打包下载
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 页脚 -->
+    <footer class="mt-16 text-center text-gray-500 text-sm">
+      <p>© 2023 图片批量调整工具 - 支持文件夹上传和目录结构保持</p>
+    </footer>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // 全局变量
+      let uploadedFiles = [];
+      let fileTree = {};
+      let processedImages = [];
+      let processedTree = {};
+      
+      // DOM元素
+      const dropzone = document.getElementById('dropzone');
+      const fileInput = document.getElementById('file-input');
+      const selectFilesBtn = document.getElementById('select-files-btn');
+      const selectFolderBtn = document.getElementById('select-folder-btn');
+      const previewArea = document.getElementById('preview-area');
+      const directoryTree = document.getElementById('directory-tree');
+      const fileCount = document.getElementById('file-count');
+      const clearFilesBtn = document.getElementById('clear-files-btn');
+      const nextStepBtn = document.getElementById('next-step-btn');
+      
+      const uploadSection = document.getElementById('upload-section');
+      const settingsSection = document.getElementById('settings-section');
+      const processingSection = document.getElementById('processing-section');
+      const downloadSection = document.getElementById('download-section');
+      const resultDirectoryTree = document.getElementById('result-directory-tree');
+      
+      const backToUploadBtn = document.getElementById('back-to-upload-btn');
+      const processImagesBtn = document.getElementById('process-images-btn');
+      const startOverBtn = document.getElementById('start-over-btn');
+      const downloadAllBtn = document.getElementById('download-all-btn');
+      const downloadZipBtn = document.getElementById('download-zip-btn');
+      
+      // 修改后的文件大小限制相关元素
+      const sizeLimitInput = document.getElementById('size-limit-input');
+      const sizeLimitBadge = document.getElementById('size-limit-badge');
+      const sizeLimitStatus = document.getElementById('size-limit-status');
+
+      // 初始化
+      selectFilesBtn.addEventListener('click', () => {
+        fileInput.removeAttribute('webkitdirectory');
+        fileInput.removeAttribute('directory');
+        fileInput.click();
+      });
+      
+      selectFolderBtn.addEventListener('click', () => {
+        fileInput.setAttribute('webkitdirectory', '');
+        fileInput.setAttribute('directory', '');
+        fileInput.click();
+      });
+      
+      // 拖放功能
+      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropzone.addEventListener(eventName, preventDefaults, false);
+      });
+      
+      function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      
+      ['dragenter', 'dragover'].forEach(eventName => {
+        dropzone.addEventListener(eventName, highlight, false);
+      });
+      
+      ['dragleave', 'drop'].forEach(eventName => {
+        dropzone.addEventListener(eventName, unhighlight, false);
+      });
+      
+      function highlight() {
+        dropzone.classList.add('active');
+      }
+      
+      function unhighlight() {
+        dropzone.classList.remove('active');
+      }
+      
+      dropzone.addEventListener('drop', handleDrop, false);
+      
+      function handleDrop(e) {
+        const dt = e.dataTransfer;
+        const items = dt.items;
+        
+        if (items) {
+          // 检查是否有文件夹
+          let hasDirectories = false;
+          for (let i = 0; i < items.length; i++) {
+            const entry = items[i].webkitGetAsEntry();
+            if (entry && entry.isDirectory) {
+              hasDirectories = true;
+              break;
+            }
+          }
+          
+          if (hasDirectories) {
+            // 处理文件夹拖放
+            processDirectoryDrop(items);
+          } else {
+            // 处理文件拖放
+            handleFiles(dt.files);
+          }
+        } else {
+          // 回退到普通文件处理
+          handleFiles(dt.files);
+        }
+      }
+      
+      // 处理文件夹拖放
+      function processDirectoryDrop(items) {
+        fileTree = {};
+        uploadedFiles = [];
+        
+        let promises = [];
+        let fileCount = 0;
+        
+        for (let i = 0; i < items.length; i++) {
+          const entry = items[i].webkitGetAsEntry();
+          if (entry) {
+            promises.push(scanDirectory(entry, ''));
+          }
+        }
+        
+        Promise.all(promises).then(() => {
+          updateFileCount();
+          renderDirectoryTree();
+          previewArea.classList.remove('hidden');
+          // 拖入文件后隐藏拖放区域
+          dropzone.classList.add('hidden');
+        });
+      }
+      
+      // 扫描目录
+      function scanDirectory(entry, path) {
+        return new Promise((resolve) => {
+          if (entry.isFile) {
+            entry.file(file => {
+              if (file.type.startsWith('image/')) {
+                const filePath = path ? `${path}/${file.name}` : file.name;
+                addFileToTree(file, filePath);
+                uploadedFiles.push({file, path});
+              }
+              resolve();
+            });
+          } else if (entry.isDirectory) {
+            const dirReader = entry.createReader();
+            dirReader.readEntries(entries => {
+              let subPromises = [];
+              const newPath = path ? `${path}/${entry.name}` : entry.name;
+              
+              // 在文件树中创建目录节点
+              let currentLevel = fileTree;
+              const pathParts = newPath.split('/');
+              for (let part of pathParts) {
+                if (!currentLevel[part]) {
+                  currentLevel[part] = { __isDir: true, __path: pathParts.slice(0, pathParts.indexOf(part) + 1).join('/') };
+                }
+                currentLevel = currentLevel[part];
+              }
+              
+              for (let subEntry of entries) {
+                subPromises.push(scanDirectory(subEntry, newPath));
+              }
+              
+              Promise.all(subPromises).then(resolve);
+            });
+          }
+        });
+      }
+      
+      // 添加文件到树结构
+      function addFileToTree(file, filePath) {
+        let currentLevel = fileTree;
+        const pathParts = filePath.split('/');
+        const fileName = pathParts.pop();
+        
+        for (let part of pathParts) {
+          if (!currentLevel[part]) {
+            currentLevel[part] = { __isDir: true, __path: pathParts.slice(0, pathParts.indexOf(part) + 1).join('/') };
+          }
+          currentLevel = currentLevel[part];
+        }
+        
+        currentLevel[fileName] = {
+          file,
+          __isFile: true,
+          __path: filePath
+        };
+      }
+      
+      // 文件选择处理
+      fileInput.addEventListener('change', () => {
+        if (fileInput.files.length > 0) {
+          if (fileInput.hasAttribute('webkitdirectory')) {
+            // 处理文件夹选择
+            fileTree = {};
+            uploadedFiles = [];
+            
+            // 由于浏览器限制，我们只能获取文件列表而无法获取完整目录结构
+            // 这里我们尝试从webkitRelativePath中重建目录结构
+            for (let i = 0; i < fileInput.files.length; i++) {
+              const file = fileInput.files[i];
+              if (file.type.startsWith('image/')) {
+                const filePath = file.webkitRelativePath || file.name;
+                addFileToTree(file, filePath);
+                uploadedFiles.push({file, path: filePath});
+              }
+            }
+            
+            updateFileCount();
+            renderDirectoryTree();
+            previewArea.classList.remove('hidden');
+            // 选择文件后隐藏拖放区域
+            dropzone.classList.add('hidden');
+          } else {
+            // 处理普通文件选择
+            handleFiles(fileInput.files);
+          }
+        }
+      });
+      
+      // 处理上传的文件
+      function handleFiles(files) {
+        fileTree = {};
+        uploadedFiles = [];
+        
+        const fileList = Array.from(files).filter(file => file.type.startsWith('image/'));
+        
+        if (fileList.length === 0) {
+          alert('请选择有效的图片文件！');
+          return;
+        }
+        
+        // 将所有文件放在根目录
+        for (let file of fileList) {
+          fileTree[file.name] = {
+            file,
+            __isFile: true,
+            __path: file.name
+          };
+          uploadedFiles.push({file, path: file.name});
+        }
+        
+        updateFileCount();
+        renderDirectoryTree();
+        previewArea.classList.remove('hidden');
+        // 拖入文件后隐藏拖放区域
+        dropzone.classList.add('hidden');
+      }
+      
+      // 更新文件计数
+      function updateFileCount() {
+        fileCount.textContent = uploadedFiles.length;
+      }
+      
+      // 渲染目录树
+      function renderDirectoryTree() {
+        directoryTree.innerHTML = '';
+        
+        function renderTree(node, container) {
+          const ul = document.createElement('ul');
+          ul.className = 'space-y-1';
+          
+          for (let key in node) {
+            if (key.startsWith('__')) continue;
+            
+            const li = document.createElement('li');
+            
+            if (node[key].__isDir) {
+              li.className = 'folder-item';
+              li.innerHTML = `<span class="font-medium">${key}</span>`;
+              
+              const subContainer = document.createElement('div');
+              subContainer.className = 'pl-4';
+              renderTree(node[key], subContainer);
+              
+              li.appendChild(subContainer);
+            } else if (node[key].__isFile) {
+              li.className = 'file-item text-sm text-gray-600';
+              li.textContent = `${key} (${formatFileSize(node[key].file.size)})`;
+            }
+            
+            ul.appendChild(li);
+          }
+          
+          container.appendChild(ul);
+        }
+        
+        renderTree(fileTree, directoryTree);
+      }
+      
+      // 渲染结果目录树
+      function renderResultDirectoryTree() {
+        resultDirectoryTree.innerHTML = '';
+        
+        function renderTree(node, container) {
+          const ul = document.createElement('ul');
+          ul.className = 'space-y-1';
+          
+          for (let key in node) {
+            if (key.startsWith('__')) continue;
+            
+            const li = document.createElement('li');
+            
+            if (node[key].__isDir) {
+              li.className = 'folder-item';
+              li.innerHTML = `<span class="font-medium">${key}</span>`;
+              
+              const subContainer = document.createElement('div');
+              subContainer.className = 'pl-4';
+              renderTree(node[key], subContainer);
+              
+              li.appendChild(subContainer);
+            } else if (node[key].__isFile) {
+              li.className = 'file-item text-sm text-gray-600';
+              const originalSize = formatFileSize(node[key].originalSize);
+              const processedSize = formatFileSize(node[key].processedSize);
+              li.innerHTML = `${key} <span class="text-xs text-gray-400">(原: ${originalSize})</span> <span class="text-xs text-green-500">(处理后: ${processedSize})</span>`;
+            }
+            
+            ul.appendChild(li);
+          }
+          
+          container.appendChild(ul);
+        }
+        
+        renderTree(processedTree, resultDirectoryTree);
+      }
+      
+      // 格式化文件大小
+      function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+      }
+      
+      // 清除所有图片
+      clearFilesBtn.addEventListener('click', () => {
+        uploadedFiles = [];
+        fileTree = {};
+        previewArea.classList.add('hidden');
+        // 清除文件后显示拖放区域
+        dropzone.classList.remove('hidden');
+      });
+      
+      // 导航到设置步骤
+      nextStepBtn.addEventListener('click', () => {
+        uploadSection.classList.add('hidden');
+        settingsSection.classList.remove('hidden');
+      });
+      
+      // 返回上传步骤
+      backToUploadBtn.addEventListener('click', () => {
+        settingsSection.classList.add('hidden');
+        uploadSection.classList.remove('hidden');
+      });
+      
+      // 开始处理图片
+      processImagesBtn.addEventListener('click', () => {
+        settingsSection.classList.add('hidden');
+        processingSection.classList.remove('hidden');
+        
+        // 获取设置
+        const width = parseInt(document.getElementById('custom-width').value) || 1600;
+        const height = parseInt(document.getElementById('custom-height').value) || 1600;
+        
+        const maintainAspect = document.getElementById('maintain-aspect').checked;
+        const outputFormat = document.getElementById('output-format').value;
+        const quality = parseInt(document.getElementById('quality').value) || 100;
+        const resizeMethod = document.getElementById('resize-method').value;
+        const outputStructure = document.getElementById('output-structure').value;
+        
+        // 获取文件大小限制设置
+        const sizeLimitMB = parseFloat(sizeLimitInput.value) || 0;
+        let sizeLimitBytes = sizeLimitMB * 1024 * 1024;
+        
+        // 处理图片
+        processImages(width, height, maintainAspect, outputFormat, quality, resizeMethod, outputStructure, sizeLimitBytes);
+      });
+      
+      // 处理图片函数
+      function processImages(width, height, maintainAspect, outputFormat, quality, resizeMethod, outputStructure, sizeLimitBytes) {
+        const progressBar = document.getElementById('processing-progress');
+        const statusText = document.getElementById('processing-status');
+        
+        processedImages = [];
+        processedTree = {};
+        let processedCount = 0;
+        let skippedCount = 0;
+        let compressedCount = 0;
+        
+        // 处理单个图片
+        const processImage = (file, path, callback) => {
+          return new Promise((resolve) => {
+            const reader = new FileReader();
+            
+            reader.onload = (e) => {
+              const img = new Image();
+              img.onload = () => {
+                // 检查文件大小限制
+                if (sizeLimitBytes > 0 && file.size <= sizeLimitBytes) {
+                  // 文件小于限制，直接添加到结果
+                  const result = {
+                    originalName: file.name,
+                    processedName: getProcessedFileName(file.name, outputFormat),
+                    originalPath: path,
+                    dataUrl: e.target.result,
+                    size: file.size,
+                    processedSize: file.size,
+                    skipped: false
+                  };
+                  
+                  addFileToProcessedTree(result, outputStructure);
+                  resolve(result);
+                  return;
+                }
+                
+                // 创建canvas进行图片处理
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                
+                // 计算新尺寸
+                let newWidth, newHeight;
+                
+                if (maintainAspect) {
+                  const aspectRatio = img.width / img.height;
+                  
+                  if (resizeMethod === 'cover') {
+                    // 裁剪填充
+                    if (width / height > aspectRatio) {
+                      newWidth = width;
+                      newHeight = width / aspectRatio;
+                    } else {
+                      newHeight = height;
+                      newWidth = height * aspectRatio;
+                    }
+                  } else if (resizeMethod === 'contain') {
+                    // 包含全部
+                    if (width / height > aspectRatio) {
+                      newHeight = height;
+                      newWidth = height * aspectRatio;
+                    } else {
+                      newWidth = width;
+                      newHeight = width / aspectRatio;
+                    }
+                  } else {
+                    // 拉伸适应
+                    newWidth = width;
+                    newHeight = height;
+                  }
+                } else {
+                  newWidth = width;
+                  newHeight = height;
+                }
+                
+                canvas.width = width;
+                canvas.height = height;
+                
+                // 绘制图片
+                if (resizeMethod === 'cover') {
+                  // 裁剪填充
+                  ctx.drawImage(img, 
+                    (newWidth - width) / -2, 
+                    (newHeight - height) / -2, 
+                    newWidth, newHeight);
+                } else {
+                  // 包含全部或拉伸
+                  ctx.drawImage(img, 0, 0, newWidth, newHeight);
+                }
+                
+                // 获取处理后的数据URL
+                let mimeType = 'image/jpeg';
+                if (outputFormat === 'png') mimeType = 'image/png';
+                else if (outputFormat === 'webp') mimeType = 'image/webp';
+                else if (file.type) mimeType = file.type;
+                
+                const qualityValue = (mimeType === 'image/jpeg' || mimeType === 'image/webp') ? quality / 100 : 1;
+                const processedDataUrl = canvas.toDataURL(mimeType, qualityValue);
+                
+                // 创建结果对象
+                const result = {
+                  originalName: file.name,
+                  processedName: getProcessedFileName(file.name, outputFormat),
+                  originalPath: path,
+                  dataUrl: processedDataUrl,
+                  size: file.size,
+                  processedSize: Math.floor(processedDataUrl.length / 4 * 3), // 估算处理后的文件大小
+                  skipped: false
+                };
+                
+                // 添加到处理后的树结构
+                addFileToProcessedTree(result, outputStructure);
+                
+                resolve(result);
+              };
+              img.src = e.target.result;
+            };
+            
+            reader.readAsDataURL(file);
+          });
+        };
+        
+        // 添加到处理后的树结构
+        function addFileToProcessedTree(result, outputStructure) {
+          let currentLevel = processedTree;
+          let pathParts;
+          
+          if (outputStructure === 'preserve') {
+            // 保持原始目录结构
+            pathParts = result.originalPath.split('/');
+          } else {
+            // 扁平化输出
+            pathParts = [result.processedName];
+          }
+          
+          const fileName = pathParts.pop();
+          
+          for (let part of pathParts) {
+            if (!currentLevel[part]) {
+              currentLevel[part] = { __isDir: true, __path: pathParts.slice(0, pathParts.indexOf(part) + 1).join('/') };
+            }
+            currentLevel = currentLevel[part];
+          }
+          
+          currentLevel[fileName] = {
+            ...result,
+            __isFile: true,
+            __path: pathParts.join('/') + '/' + fileName
+          };
+        }
+        
+        // 处理所有图片
+        const processNextImage = () => {
+          if (processedCount >= uploadedFiles.length) {
+            // 处理完成
+            setTimeout(() => {
+              processingSection.classList.add('hidden');
+              downloadSection.classList.remove('hidden');
+              renderResultDirectoryTree();
+              
+              // 显示处理统计信息
+              if (sizeLimitBytes > 0) {
+                sizeLimitStatus.innerHTML = `
+                  <div class="text-left max-w-md mx-auto mt-4 p-3 bg-gray-50 rounded-lg">
+                    <p class="text-sm font-medium">文件大小限制: ${formatFileSize(sizeLimitBytes)}</p>
+                    <p class="text-sm mt-1">压缩文件: ${compressedCount}</span></p>
+                    <p class="text-sm">跳过文件: ${skippedCount}</span></p>
+                  </div>
+                `;
+              }
+            }, 500);
+            return;
+          }
+          
+          const {file, path} = uploadedFiles[processedCount];
+          statusText.textContent = `正在处理: ${path} (${processedCount + 1}/${uploadedFiles.length})`;
+          
+          // 检查文件大小限制
+          if (sizeLimitBytes > 0 && file.size <= sizeLimitBytes) {
+            skippedCount++;
+            processedCount++;
+            progressBar.style.width = `${(processedCount / uploadedFiles.length) * 100}%`;
+            processNextImage();
+            return;
+          }
+          
+          // 需要处理的文件
+          compressedCount++;
+          processImage(file, path).then(result => {
+            processedImages.push(result);
+            processedCount++;
+            progressBar.style.width = `${(processedCount / uploadedFiles.length) * 100}%`;
+            
+            // 处理下一张图片
+            processNextImage();
+          });
+        };
+        
+        // 开始处理
+        processNextImage();
+      }
+      
+      // 获取处理后的文件名
+      function getProcessedFileName(originalName, outputFormat) {
+        if (outputFormat === 'original') {
+          return originalName;
+        }
+        
+        const dotIndex = originalName.lastIndexOf('.');
+        const nameWithoutExt = dotIndex === -1 ? originalName : originalName.substring(0, dotIndex);
+        
+        switch (outputFormat) {
+          case 'jpeg': return `${nameWithoutExt}.jpg`;
+          case 'png': return `${nameWithoutExt}.png`;
+          case 'webp': return `${nameWithoutExt}.webp`;
+          default: return originalName;
+        }
+      }
+      
+      // 下载单个图片
+      function downloadImage(dataUrl, fileName) {
+        const link = document.createElement('a');
+        link.href = dataUrl;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+      
+      // 下载全部图片
+      downloadAllBtn.addEventListener('click', () => {
+        function downloadFilesFromTree(node, currentPath = '') {
+          for (let key in node) {
+            if (key.startsWith('__')) continue;
+            
+            if (node[key].__isDir) {
+              downloadFilesFromTree(node[key], currentPath ? `${currentPath}/${key}` : key);
+            } else if (node[key].__isFile) {
+              const fullPath = currentPath ? `${currentPath}/${key}` : key;
+              downloadImage(node[key].dataUrl, fullPath);
+            }
+          }
+        }
+        
+        downloadFilesFromTree(processedTree);
+      });
+      
+      // 打包下载
+      downloadZipBtn.addEventListener('click', () => {
+        const zip = new JSZip();
+
+        // 递归添加文件和文件夹到ZIP
+        function addToZip(node, zipFolder, path = '') {
+          for (let key in node) {
+            if (key.startsWith('__')) continue;
+
+            if (node[key].__isDir) {
+              // 创建子文件夹
+              const newFolder = zipFolder.folder(key);
+              addToZip(node[key], newFolder);
+            } else if (node[key].__isFile) {
+              // 添加文件
+              const data = node[key].dataUrl.split(',')[1];
+              // 使用正确的文件名编码
+              const fileName = decodeURIComponent(escape(key));
+              zipFolder.file(fileName, data, {base64: true});
+            }
+          }
+        }
+
+        // 开始创建ZIP
+        addToZip(processedTree, zip);
+
+        // 生成ZIP文件
+        zip.generateAsync({
+          type: 'blob',
+          // 设置正确的编码
+          encodeFileName: (name) => {
+            return name;
+          }
+        }).then(content => {
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(content);
+          link.download = 'processed_images.zip';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(link.href);
+        });
+      });
+      
+      // 重新开始
+      startOverBtn.addEventListener('click', () => {
+        uploadedFiles = [];
+        processedImages = [];
+        fileTree = {};
+        processedTree = {};
+        
+        downloadSection.classList.add('hidden');
+        uploadSection.classList.remove('hidden');
+        previewArea.classList.add('hidden');
+        // 重新开始时显示拖放区域
+        dropzone.classList.remove('hidden');
+        
+        // 重置文件输入
+        fileInput.value = '';
+        
+        // 重置状态信息
+        sizeLimitStatus.textContent = '';
+      });
+      
+      // 质量输入框事件
+      const qualityInput = document.getElementById('quality');
+      const qualityValue = document.getElementById('quality-value');
+      
+      qualityInput.addEventListener('input', () => {
+        qualityValue.textContent = `${qualityInput.value}%`;
+      });
+      
+      // 文件大小限制输入框事件
+      sizeLimitInput.addEventListener('input', updateSizeLimitDisplay);
+      
+      function updateSizeLimitDisplay() {
+        const value = parseFloat(sizeLimitInput.value);
+        
+        if (value === 0) {
+          sizeLimitBadge.innerHTML = '<i class="fas fa-info-circle mr-1"></i> 不限制';
+        } else {
+          sizeLimitBadge.innerHTML = `<i class="fas fa-compress-alt mr-1"></i> ${value} MB`;
+        }
+      }
+      
+      // 初始化显示
+      updateSizeLimitDisplay();
+    });
+  </script>
+</body>
+</html>

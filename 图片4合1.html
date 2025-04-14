@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN"></html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图片合成</title>
+    <script src="https://unpkg.com/@tailwindcss/browser@4"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" rel="stylesheet">
+    <style>
+        #drop-area {
+            border: 2px dashed #ccc;
+            border-radius: 20px;
+            width: 700px;
+            font-family: sans-serif;
+            margin: 100px auto;
+            padding: 20px;
+        }
+
+        #drop-area.highlight {
+            border-color: rgb(128, 0, 128)
+        }
+
+        p {
+            margin-top: 0;
+        }
+
+        .my-form {
+            margin-bottom: 10px;
+        }
+
+        #gallery {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        #gallery img {
+            width: 100%;
+            height: auto;
+        }
+
+        .button {
+            display: inline-block;
+            padding: 10px;
+            background: #ccc;
+            cursor: pointer;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+
+        .button:hover {
+            background: #ddd;
+        }
+
+        #fileElem {
+            display: none;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100 flex flex-col items-center justify-center min-h-screen">
+    <div id="drop-area">
+        <form class="my-form">
+            <p>拖入四张图片或者
+                <label class="button" for="fileElem">选择文件</label>
+                <input type="file" id="fileElem" multiple accept="image/*" onchange="handleFiles(this.files)">
+            </p>
+        </form>
+        <div id="gallery"></div>
+        <div class="mt-4">
+            <label for="width">合成图片宽度:</label>
+            <input type="number" width="50px" id="width" value="1600">
+            <label for="height">合成图片高度:</label>
+            <input type="number" width="50px" id="height" value="1600">
+        </div>
+        <button id="combine-button" class="mt-4 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">合成</button>
+        <canvas id="combined-canvas" style="display: none;"></canvas>
+        <a id="download-link" style="display: none;">下载合成图片</a>
+    </div>
+
+    <script>
+        let dropArea = document.getElementById('drop-area');
+        let files = [];
+
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropArea.addEventListener(eventName, highlight, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, unhighlight, false);
+        });
+
+        function highlight(e) {
+            dropArea.classList.add('highlight');
+        }
+
+        function unhighlight(e) {
+            dropArea.classList.remove('highlight');
+        }
+
+        dropArea.addEventListener('drop', handleDrop, false);
+
+        function handleDrop(e) {
+            let dt = e.dataTransfer;
+            let droppedFiles = dt.files;
+            handleFiles(droppedFiles);
+        }
+
+        function handleFiles(newFiles) {
+            for (let i = 0; i < newFiles.length; i++) {
+                if (files.length < 4) {
+                    files.push(newFiles[i]);
+                    displayImage(newFiles[i]);
+                }
+            }
+        }
+
+        function displayImage(file) {
+            let reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onloadend = function () {
+                let img = document.createElement('img');
+                img.src = reader.result;
+                document.getElementById('gallery').appendChild(img);
+            }
+        }
+
+        document.getElementById('combine-button').addEventListener('click', combineImages);
+
+        function combineImages() {
+            if (files.length === 4) {
+                let width = parseInt(document.getElementById('width').value);
+                let height = parseInt(document.getElementById('height').value);
+                let canvas = document.getElementById('combined-canvas');
+                canvas.width = width;
+                canvas.height = height;
+                let ctx = canvas.getContext('2d');
+
+                let loadedImages = 0;
+                let images = [];
+
+                function drawImages() {
+                    ctx.drawImage(images[0], 0, 0, width / 2, height / 2);
+                    ctx.drawImage(images[1], width / 2, 0, width / 2, height / 2);
+                    ctx.drawImage(images[2], 0, height / 2, width / 2, height / 2);
+                    ctx.drawImage(images[3], width / 2, height / 2, width / 2, height / 2);
+
+                    let downloadLink = document.getElementById('download-link');
+                    downloadLink.href = canvas.toDataURL('image/png');
+                    downloadLink.download = 'combined_image.png';
+                    downloadLink.style.display = 'block';
+                }
+
+                for (let i = 0; i < 4; i++) {
+                    let img = new Image();
+                    img.src = URL.createObjectURL(files[i]);
+                    img.onload = function () {
+                        images[i] = this;
+                        loadedImages++;
+                        if (loadedImages === 4) {
+                            drawImages();
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</body>
+
+</html>
