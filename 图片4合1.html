@@ -1,115 +1,251 @@
 <!DOCTYPE html>
-<html lang="zh-CN"></html>
-
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>图片合成</title>
-    <script src="https://unpkg.com/@tailwindcss/browser@4"></script>
+    <title>高级图片合成工具</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            transitionProperty: {
+              'layout': 'transform, opacity, box-shadow, background',
+              'position': 'top, left, right, bottom',
+              'spacing': 'margin, padding',
+            }
+          }
+        }
+      }
+    </script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" rel="stylesheet">
     <style>
         #drop-area {
-            border: 2px dashed #ccc;
-            border-radius: 20px;
-            width: 700px;
-            font-family: sans-serif;
-            margin: 100px auto;
-            padding: 20px;
+            transition: all 0.3s ease;
         }
-
         #drop-area.highlight {
-            border-color: rgb(128, 0, 128)
+            border-color: rgba(168, 85, 247, 0.8);
+            background-color: rgba(168, 85, 247, 0.05);
+            box-shadow: 0 0 0 4px rgba(168, 85, 247, 0.2);
         }
-
-        p {
-            margin-top: 0;
+        .image-container {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
         }
-
-        .my-form {
-            margin-bottom: 10px;
+        .image-container.dragging {
+            opacity: 0.7;
+            box-shadow: 0 10px 25px -5px rgba(168, 85, 247, 0.3);
+            z-index: 100;
         }
-
-        #gallery {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 10px;
-            margin-top: 10px;
+        .empty-slot {
+            background: repeating-linear-gradient(
+                45deg,
+                rgba(168, 85, 247, 0.1),
+                rgba(168, 85, 247, 0.1) 10px,
+                rgba(168, 85, 247, 0.2) 10px,
+                rgba(168, 85, 247, 0.2) 20px
+            );
+            transition: all 0.3s ease;
         }
-
-        #gallery img {
-            width: 100%;
-            height: auto;
-        }
-
-        .button {
-            display: inline-block;
-            padding: 10px;
-            background: #ccc;
+        .remove-btn {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background-color: #ef4444;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             cursor: pointer;
-            border-radius: 5px;
-            border: 1px solid #ccc;
+            opacity: 0;
+            transition: all 0.2s ease;
         }
-
-        .button:hover {
-            background: #ddd;
+        .image-container:hover .remove-btn {
+            opacity: 1;
         }
-
-        #fileElem {
-            display: none;
+        .preview-collage {
+            transition: all 0.3s ease;
+        }
+        .preview-collage.show {
+            opacity: 1;
+        }
+        @keyframes slideIn {
+            from { transform: translateY(10px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .slide-in {
+            animation: slideIn 0.3s ease-out forwards;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-5px); }
+            40%, 80% { transform: translateX(5px); }
+        }
+        .animate-shake {
+            animation: shake 0.5s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+        .action-button {
+            transition: all 0.2s ease;
+        }
+        .action-button:hover {
+            transform: translateY(-2px);
         }
     </style>
 </head>
 
-<body class="bg-gray-100 flex flex-col items-center justify-center min-h-screen">
-    <div id="drop-area">
-        <form class="my-form">
-            <p>拖入四张图片或者
-                <label class="button" for="fileElem">选择文件</label>
-                <input type="file" id="fileElem" multiple accept="image/*" onchange="handleFiles(this.files)">
-            </p>
-        </form>
-        <div id="gallery"></div>
-        <div class="mt-4">
-            <label for="width">合成图片宽度:</label>
-            <input type="number" width="50px" id="width" value="1600">
-            <label for="height">合成图片高度:</label>
-            <input type="number" width="50px" id="height" value="1600">
+<body class="bg-gradient-to-br from-purple-50 to-indigo-50 min-h-screen p-4 md:p-8">
+    <div class="max-w-7xl mx-auto">
+        <div class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-purple-800 mb-2">高级图片合成工具</h1>
+            <p class="text-gray-600">上传4张图片创建完美合成</p>
         </div>
-        <button id="combine-button" class="mt-4 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">合成</button>
-        <canvas id="combined-canvas" style="display: none;"></canvas>
-        <a id="download-link" style="display: none;">下载合成图片</a>
+        
+        <!-- Upload Area (initially shown) -->
+        <div id="upload-area" class="bg-white rounded-xl shadow-lg p-6 border-2 border-dashed border-gray-300 transition-all">
+            <form class="my-form text-center">
+                <div id="drop-text" class="transition-all">
+                    <i class="fas fa-cloud-upload-alt text-4xl text-purple-400 mb-4"></i>
+                    <p class="text-lg font-medium mb-2">拖拽图片到这里</p>
+                    <p class="text-gray-500 mb-4">或者</p>
+                    <label for="fileElem" class="inline-flex items-center px-6 py-3 bg-gradient-to-r from-purple-500 to-indigo-500 text-white font-medium rounded-lg shadow-md hover:from-purple-600 hover:to-indigo-600 transition-all cursor-pointer">
+                        <i class="fas fa-folder-open mr-2"></i> 选择图片文件
+                    </label>
+                    <input type="file" id="fileElem" multiple accept="image/*" class="hidden" onchange="handleFiles(this.files)">
+                    <p class="text-sm text-gray-500 mt-4">支持JPG, PNG, GIF等格式 (最多4张)</p>
+                </div>
+            </form>
+        </div>
+        
+        <!-- Main Content Area (hidden initially) -->
+        <div id="main-content" class="hidden bg-white rounded-xl shadow-lg p-6 border border-gray-300">
+            <div class="md:flex gap-8">
+                <!-- Left Panel - Controls -->
+                <div class="flex-1 space-y-6">
+                    <!-- Config Settings -->
+                    <div class="space-y-4">
+                        <h3 class="text-lg font-medium text-gray-800">合成设置</h3>
+                        <div>
+                            <label for="width" class="block text-sm font-medium text-gray-700 mb-1">合成宽度 (px)</label>
+                            <input type="number" id="width" min="100" max="4000" value="1600" 
+                                   class="w-full p-3 border border-gray-300 rounded-lg focus:ring-purple-500 focus:border-purple-500 bg-gray-50">
+                        </div>
+                        <div>
+                            <label for="height" class="block text-sm font-medium text-gray-700 mb-1">合成高度 (px)</label>
+                            <input type="number" id="height" min="100" max="4000" value="1600" 
+                                   class="w-full p-3 border border-gray-300 rounded-lg focus:ring-purple-500 focus:border-purple-500 bg-gray-50">
+                        </div>
+                    </div>
+                    
+                    <!-- Action Buttons -->
+                    <div class="pt-2">
+                        <div class="flex space-x-4">
+                            <button id="reset-button" class="flex-1 flex items-center justify-center px-4 py-3 text-white bg-gray-500 hover:bg-gray-600 rounded-lg transition-colors">
+                                <i class="fas fa-redo mr-2"></i> 重新上传
+                            </button>
+                            <button id="combine-button" class="flex-1 flex items-center justify-center px-4 py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-medium rounded-lg shadow-md hover:from-green-600 hover:to-emerald-600 transition-all">
+                                <i class="fas fa-magic mr-2"></i> 立即合成
+                            </button>
+                        </div>
+                        <div class="flex items-center mt-3">
+                            <input type="checkbox" id="auto-download" checked class="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500 mr-2">
+                            <label for="auto-download" class="text-sm text-gray-700">自动下载合成结果</label>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Right Panel - Preview -->
+                <div class="flex-1">
+                    <div class="h-full bg-white rounded-xl shadow-sm p-6 border border-gray-200">
+                        <h3 id="preview-title" class="text-lg font-medium text-gray-800 mb-4">预览效果</h3>
+                        
+                        <!-- Preview Collage Container -->
+                        <div id="preview-collage" class="preview-collage w-full aspect-square bg-gray-100 rounded-lg overflow-hidden relative">
+                            <!-- This will be filled dynamically with images -->
+                        </div>
+                        
+                        <!-- Combined Result Container (hidden initially) -->
+                        <div id="combined-result" class="hidden w-full aspect-square bg-gray-100 rounded-lg overflow-hidden relative flex items-center justify-center">
+                            <!-- Will show the combined image -->
+                        </div>
+                        
+                        <p id="preview-hint" class="text-sm text-gray-500 mt-3">拖拽图片可调整位置顺序</p>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
-        let dropArea = document.getElementById('drop-area');
+        // Main application variables
         let files = [];
+        let draggedIndex = null;
+        let originalPosition = null;
+        let isCombinedView = false;
+        let currentCombinedImageUrl = null;
+        
+        // DOM elements
+        const uploadArea = document.getElementById('upload-area');
+        const mainContent = document.getElementById('main-content');
+        const dropText = document.getElementById('drop-text');
+        const previewCollage = document.getElementById('preview-collage');
+        const combinedResult = document.getElementById('combined-result');
+        const previewTitle = document.getElementById('preview-title');
+        const previewHint = document.getElementById('preview-hint');
+        
+        // Initialize drag and drop
+        initDragAndDrop();
 
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            dropArea.addEventListener(eventName, preventDefaults, false);
-        });
+        function initDragAndDrop() {
+            // Prevent default drag behaviors
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                uploadArea.addEventListener(eventName, preventDefaults, false);
+                document.body.addEventListener(eventName, preventDefaults, false);
+            });
+
+            // Highlight drop area
+            ['dragenter', 'dragover'].forEach(eventName => {
+                uploadArea.addEventListener(eventName, highlight, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                uploadArea.addEventListener(eventName, unhighlight, false);
+            });
+
+            // Handle dropped files
+            uploadArea.addEventListener('drop', handleDrop, false);
+            
+            // Handle file selection
+            document.getElementById('fileElem').addEventListener('change', function(e) {
+                handleFiles(this.files);
+            });
+
+            // Setup buttons
+            document.getElementById('reset-button').addEventListener('click', resetApp);
+            document.getElementById('combine-button').addEventListener('click', combineImages);
+        }
 
         function preventDefaults(e) {
             e.preventDefault();
             e.stopPropagation();
         }
 
-        ['dragenter', 'dragover'].forEach(eventName => {
-            dropArea.addEventListener(eventName, highlight, false);
-        });
-
-        ['dragleave', 'drop'].forEach(eventName => {
-            dropArea.addEventListener(eventName, unhighlight, false);
-        });
-
-        function highlight(e) {
-            dropArea.classList.add('highlight');
+        function highlight() {
+            uploadArea.classList.add('highlight');
         }
 
-        function unhighlight(e) {
-            dropArea.classList.remove('highlight');
+        function unhighlight() {
+            uploadArea.classList.remove('highlight');
         }
-
-        dropArea.addEventListener('drop', handleDrop, false);
 
         function handleDrop(e) {
             let dt = e.dataTransfer;
@@ -118,64 +254,357 @@
         }
 
         function handleFiles(newFiles) {
+            if (files.length >= 4) return;
+            
             for (let i = 0; i < newFiles.length; i++) {
-                if (files.length < 4) {
+                if (files.length < 4 && newFiles[i].type.startsWith('image/')) {
                     files.push(newFiles[i]);
-                    displayImage(newFiles[i]);
                 }
+            }
+            
+            if (files.length > 0) {
+                // Switch from upload to main interface
+                uploadArea.classList.add('hidden');
+                mainContent.classList.remove('hidden');
+                displayImages();
             }
         }
 
-        function displayImage(file) {
-            let reader = new FileReader();
+        function displayImages() {
+            // Don't show in combined view
+            if (isCombinedView) return;
+            
+            // Clear existing content
+            previewCollage.innerHTML = '';
+            
+            // Create grid container
+            const grid = document.createElement('div');
+            grid.className = 'absolute inset-0 grid grid-cols-2 grid-rows-2';
+            
+            // Create slots for each position (0-3)
+            for (let i = 0; i < 4; i++) {
+                // Create slot element
+                const slot = document.createElement('div');
+                slot.className = 'relative';
+                slot.dataset.position = i;
+                
+                // If this is the dragged item's original position, show empty slot
+                if (i === originalPosition && draggedIndex !== null) {
+                    slot.className += ' empty-slot';
+                    slot.innerHTML = '<div class="absolute inset-0 flex items-center justify-center text-purple-400"><i class="fas fa-plus-circle text-2xl"></i></div>';
+                } 
+                // If we have an image for this position and it's not the one being dragged
+                else if (files[i] && (draggedIndex === null || i !== draggedIndex)) {
+                    const container = createImageContainer(files[i], i);
+                    slot.appendChild(container);
+                }
+                
+                // Add drag and drop events
+                setupSlotEvents(slot);
+                
+                // Add to grid
+                grid.appendChild(slot);
+            }
+            
+            // Add grid to preview area
+            previewCollage.appendChild(grid);
+            
+            // Update preview title and hint
+            previewTitle.textContent = '预览效果';
+            previewHint.textContent = '拖拽图片可调整位置顺序';
+            previewHint.classList.remove('hidden');
+        }
+
+        function createImageContainer(file, index) {
+            const container = document.createElement('div');
+            container.className = 'image-container w-full h-full';
+            container.draggable = true;
+            container.dataset.index = index;
+            
+            const img = document.createElement('img');
+            img.className = 'w-full h-full object-cover';
+            
+            const removeBtn = document.createElement('div');
+            removeBtn.className = 'remove-btn';
+            removeBtn.innerHTML = '×';
+            removeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                removeImage(index);
+            });
+            
+            container.appendChild(img);
+            container.appendChild(removeBtn);
+            
+            // Read the file and set image source
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                img.src = e.target.result;
+            };
             reader.readAsDataURL(file);
-            reader.onloadend = function () {
-                let img = document.createElement('img');
-                img.src = reader.result;
-                document.getElementById('gallery').appendChild(img);
-            }
+            
+            // Set up drag events for the container
+            setupDragEvents(container);
+            
+            return container;
         }
 
-        document.getElementById('combine-button').addEventListener('click', combineImages);
+        function setupDragEvents(element) {
+            element.addEventListener('dragstart', function(e) {
+                // Store original position
+                draggedIndex = parseInt(this.dataset.index);
+                originalPosition = parseInt(this.dataset.index);
+                
+                // Add dragging class
+                this.classList.add('dragging');
+                
+                // Set data for transfer
+                e.dataTransfer.setData('text/plain', this.dataset.index);
+                e.dataTransfer.effectAllowed = 'move';
+                
+                // Update display to show empty slot
+                displayImages();
+            });
+            
+            element.addEventListener('dragend', function() {
+                // Reset drag state
+                draggedIndex = null;
+                originalPosition = null;
+                
+                // Remove dragging class from all elements
+                document.querySelectorAll('.dragging').forEach(el => {
+                    el.classList.remove('dragging');
+                });
+                
+                // Update display
+                displayImages();
+            });
+        }
 
-        function combineImages() {
-            if (files.length === 4) {
-                let width = parseInt(document.getElementById('width').value);
-                let height = parseInt(document.getElementById('height').value);
-                let canvas = document.getElementById('combined-canvas');
-                canvas.width = width;
-                canvas.height = height;
-                let ctx = canvas.getContext('2d');
-
-                let loadedImages = 0;
-                let images = [];
-
-                function drawImages() {
-                    ctx.drawImage(images[0], 0, 0, width / 2, height / 2);
-                    ctx.drawImage(images[1], width / 2, 0, width / 2, height / 2);
-                    ctx.drawImage(images[2], 0, height / 2, width / 2, height / 2);
-                    ctx.drawImage(images[3], width / 2, height / 2, width / 2, height / 2);
-
-                    let downloadLink = document.getElementById('download-link');
-                    downloadLink.href = canvas.toDataURL('image/png');
-                    downloadLink.download = 'combined_image.png';
-                    downloadLink.style.display = 'block';
-                }
-
-                for (let i = 0; i < 4; i++) {
-                    let img = new Image();
-                    img.src = URL.createObjectURL(files[i]);
-                    img.onload = function () {
-                        images[i] = this;
-                        loadedImages++;
-                        if (loadedImages === 4) {
-                            drawImages();
-                        }
+        function setupSlotEvents(slot) {
+            slot.addEventListener('dragover', function(e) {
+                e.preventDefault();
+            });
+            
+            slot.addEventListener('dragenter', function(e) {
+                e.preventDefault();
+                if (draggedIndex === null) return;
+                
+                const targetPosition = parseInt(this.dataset.position);
+                
+                // Only proceed if moving to a new position
+                if (targetPosition !== draggedIndex) {
+                    // Remove from old position (if exists)
+                    if (files[draggedIndex]) {
+                        const movedFile = files[draggedIndex];
+                        files.splice(draggedIndex, 1);
+                        
+                        // Insert at new position
+                        files.splice(targetPosition, 0, movedFile);
+                        
+                        // Update dragged index to new position
+                        draggedIndex = targetPosition;
+                        
+                        // Update display
+                        displayImages();
                     }
                 }
+            });
+        }
+
+        function removeImage(index) {
+            // Fade out animation
+            const containers = document.querySelectorAll(`.image-container[data-index="${index}"]`);
+            containers.forEach(container => {
+                container.style.transition = 'all 0.3s ease';
+                container.style.opacity = '0';
+                container.style.transform = 'scale(0.8)';
+            });
+            
+            setTimeout(() => {
+                files.splice(index, 1);
+                displayImages();
+                
+                // If no images left, reset to upload view
+                if (files.length === 0) {
+                    resetToUploadView();
+                }
+            }, 300);
+        }
+
+        function resetToUploadView() {
+            mainContent.classList.add('hidden');
+            uploadArea.classList.remove('hidden');
+            combinedResult.classList.add('hidden');
+            isCombinedView = false;
+            currentCombinedImageUrl = null;
+            
+            // Reset animations
+            const containers = document.querySelectorAll('.image-container');
+            containers.forEach(container => {
+                container.style = '';
+            });
+        }
+
+        function resetApp() {
+            files = [];
+            draggedIndex = null;
+            originalPosition = null;
+            resetToUploadView();
+        }
+
+        function combineImages() {
+            if (files.length !== 4) {
+                // Shake animation for feedback
+                const button = document.getElementById('combine-button');
+                if (button) {
+                    button.classList.add('animate-shake');
+                    setTimeout(() => {
+                        button.classList.remove('animate-shake');
+                    }, 500);
+                }
+                
+                alert('请上传正好4张图片进行合成');
+                return;
             }
+
+            // Show loading state
+            const button = document.getElementById('combine-button');
+            const originalText = button.innerHTML;
+            button.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-2"></i> 合成中...';
+            button.disabled = true;
+            
+            // Get canvas dimensions
+            let width = parseInt(document.getElementById('width').value);
+            let height = parseInt(document.getElementById('height').value);
+            
+            // Create canvas
+            let canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            let ctx = canvas.getContext('2d');
+            
+            // Load all images
+            let loadedImages = 0;
+            let images = [];
+            
+            function drawImages() {
+                // Draw background
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, width, height);
+                
+                // Draw the images in a 2x2 grid
+                for (let i = 0; i < 4; i++) {
+                    const x = i % 2 === 0 ? 0 : width / 2;
+                    const y = i < 2 ? 0 : height / 2;
+                    
+                    // Add subtle shadow
+                    ctx.save();
+                    ctx.shadowColor = 'rgba(0,0,0,0.15)';
+                    ctx.shadowBlur = 15;
+                    ctx.shadowOffsetX = 5;
+                    ctx.shadowOffsetY = 5;
+                    
+                    // Draw image
+                    ctx.drawImage(images[i], x, y, width / 2, height / 2);
+                    ctx.restore();
+                }
+                
+                // Convert canvas to data URL
+                let dataURL = canvas.toDataURL('image/png');
+                currentCombinedImageUrl = dataURL;
+                
+                // Show combined result
+                showCombinedResult(dataURL);
+                
+                // Auto download if checkbox is checked
+                if (document.getElementById('auto-download').checked) {
+                    downloadCombinedImage();
+                }
+                
+                // Reset button
+                button.innerHTML = originalText;
+                button.disabled = false;
+            }
+            
+            for (let i = 0; i < 4; i++) {
+                let img = new Image();
+                img.onload = function() {
+                    images[i] = this;
+                    loadedImages++;
+                    
+                    if (loadedImages === 4) {
+                        drawImages();
+                    }
+                }
+                img.src = URL.createObjectURL(files[i]);
+            }
+        }
+
+        function downloadCombinedImage() {
+            if (!currentCombinedImageUrl) return;
+            
+            const tempLink = document.createElement('a');
+            tempLink.href = currentCombinedImageUrl;
+            tempLink.download = '合成图片_' + new Date().toISOString().slice(0, 10) + '.png';
+            document.body.appendChild(tempLink);
+            tempLink.click();
+            document.body.removeChild(tempLink);
+        }
+        
+        function showCombinedResult(imageSrc) {
+            // Hide collage and show result
+            previewCollage.classList.add('hidden');
+            
+            // Set combined image
+            combinedResult.innerHTML = '';
+            const img = document.createElement('img');
+            img.src = imageSrc;
+            img.className = 'w-full h-full object-contain fade-in';
+            combinedResult.appendChild(img);
+            
+            // Create control buttons container
+            const buttonsContainer = document.createElement('div');
+            buttonsContainer.className = 'absolute top-4 right-4 flex space-x-2';
+            
+            // Add back button
+            const backBtn = document.createElement('button');
+            backBtn.className = 'action-button bg-white rounded-full p-2 shadow-md hover:bg-gray-100 transition-colors';
+            backBtn.title = '返回编辑';
+            backBtn.innerHTML = '<i class="fas fa-arrow-left text-purple-600"></i>';
+            backBtn.addEventListener('click', () => {
+                // Hide combined result and show collage
+                combinedResult.classList.add('hidden');
+                combinedResult.innerHTML = '';
+                previewCollage.classList.remove('hidden');
+                isCombinedView = false;
+                
+                // Restore collage display
+                displayImages();
+            });
+            
+            // Add download button
+            const downloadBtn = document.createElement('button');
+            downloadBtn.className = 'action-button bg-white rounded-full p-2 shadow-md hover:bg-gray-100 transition-colors';
+            downloadBtn.title = '下载图片';
+            downloadBtn.innerHTML = '<i class="fas fa-download text-blue-600"></i>';
+            downloadBtn.addEventListener('click', downloadCombinedImage);
+            
+            // Add buttons to container
+            buttonsContainer.appendChild(backBtn);
+            buttonsContainer.appendChild(downloadBtn);
+            
+            // Add container to combined result
+            combinedResult.appendChild(buttonsContainer);
+            
+            // Update preview title and hint
+            previewTitle.textContent = '合成结果';
+            previewHint.textContent = '点击按钮返回编辑或下载图片';
+            previewHint.classList.remove('hidden');
+            
+            // Show the combined result
+            combinedResult.classList.remove('hidden');
+            isCombinedView = true;
         }
     </script>
 </body>
-
 </html>
